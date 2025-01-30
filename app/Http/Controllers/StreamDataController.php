@@ -41,24 +41,13 @@ class StreamDataController extends Controller
     {
         $labels = $request->post('labels', []);
 
-        $currentHistory = StreamData::select('id', 'pointName', 'pointValue', 'pointQuality', 'pointTimestamp')
+        $currentHistoryIds = StreamData::select(DB::raw('MAX(id) as id'), 'pointName')
             ->whereIn('pointName', $labels)
-            ->orderBy('id', 'DESC')
-            ->limit(100)
+            ->groupBy('pointName')
             ->get();
 
-        return response()->json($currentHistory);
-    }
-
-    public function getSnapshotByLabelsAndLastId(Request $request)
-    {
-        $labels = $request->post('labels', []);
-        $lastId = $request->post('lastId', 0);
-
         $currentHistory = StreamData::select('id', 'pointName', 'pointValue', 'pointQuality', 'pointTimestamp')
-            ->whereIn('pointName', $labels)
-            ->where('id', '>', $lastId)
-            ->orderBy('id', 'DESC')
+            ->whereIn('id', $currentHistoryIds->pluck('id'))
             ->get();
 
         return response()->json($currentHistory);

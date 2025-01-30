@@ -15,7 +15,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'stream_data/by_labels',
             '/stream_data/history_by_labels',
-            '/stream_data/history_by_labels_update'
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

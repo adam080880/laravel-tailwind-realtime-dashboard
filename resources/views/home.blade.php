@@ -11,7 +11,7 @@
       </select>
     </div>
 
-    <div id="chart-data" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full mb-2">
+    <div id="chart-data" class="grid grid-cols-1 gap-4 w-full">
     </div>
 
     <hr class="my-3" />
@@ -24,7 +24,6 @@
   <script>
     let selectedBranch;
     let labelsByBranch;
-    let historyLastId = null;
     let dataByLabel = null;
     let historyBySource = null;
     let intervalFetchingData = null;
@@ -57,10 +56,10 @@
         }
       )).json());
       const histories = await ((await fetch(
-        historyLastId ? "{{route('stream_data.history_by_labels_update')}}" : "{{route('stream_data.history_by_labels')}}",
+        "{{route('stream_data.history_by_labels')}}",
         {
           method: 'POST',
-          body: JSON.stringify({labels: labelsByBranch[selectedBranch], lastId: historyLastId || 0}),
+          body: JSON.stringify({labels: labelsByBranch[selectedBranch]}),
           credentials: 'same-origin',
           headers: {
             'Accept': 'application/json',
@@ -69,27 +68,25 @@
         }
       )).json());
 
-      historyLastId = histories?.[0]?.id || historyLastId;
-
       const newHistoriesBySource = histories.reduce((prev, curr) => {
         return {
           ...prev,
-          [curr.pointName.split('.')[2]]: [...(prev[curr.pointName.split('.')[2]] || []), curr]
+          [curr.pointName.split('.')[2]]: {
+            ...prev[curr.pointName.split('.')[2]],
+            [curr.pointName]: [curr.pointValue],
+          },
         };
       }, {});
 
       if (!historyBySource) {
         historyBySource = newHistoriesBySource;
       } else {
-        historyBySource = Object.keys(historyBySource).reduce((prev, source) => {
-          return {
-            ...prev,
-            [source]: [
-              ...(newHistoriesBySource[source] || []),
-              ...(prev[source] || [])
-            ]
-          };
-        }, historyBySource);
+        Object.keys(newHistoriesBySource).forEach((source) => {
+          Object.keys(newHistoriesBySource[source]).forEach((label) => {
+            historyBySource[source][label].unshift(newHistoriesBySource[source][label][0]);
+            historyBySource[source][label] = historyBySource[source][label].slice(0, 100);
+          });
+        });
       }
 
       const newSnapshot = newData.reduce((prev, curr) => {
@@ -111,16 +108,18 @@
       });
 
       Object.keys(historyBySource).forEach((source) => {
-        document.getElementById(`${source}-table`).innerHTML = historyBySource[source].map((h) => {
-          return `
-            <tr>
-              <td class="px-6 py-3">${h.id}</td>
-              <td class="px-6 py-3">${h.pointName}</td>
-              <td class="px-6 py-3">${h.pointValue}</td>
-              <td class="px-6 py-3">${h.pointTimestamp}</td>
-            </tr>
-          `;
-        }).join('');
+        document.getElementById(`${source}-table`).innerHTML = `
+          <tr>
+            ${Object.keys(historyBySource[source]).sort().map((pointName) => {
+              return `<td class="px-6 py-3" style="white-space: nowrap;">
+                ${historyBySource[source][pointName][0]}
+              </td>`;
+            }).join('')}
+            <td class="px-6 py-3">
+              ${dayjs(historyBySource[source][Object.keys(historyBySource[source])[0]].slice(-1)[0].pointTimestamp).format('YYYY-MM-DD HH:mm:ss')}
+            </td>
+          </tr>
+        ` + document.getElementById(`${source}-table`).innerHTML;
       });
 
       // append snapshot to dataByLabel
@@ -129,7 +128,7 @@
       } else {
         Object.keys(newSnapshot).forEach((label) => {
           dataByLabel[label].push(newSnapshot[label][0]);
-          dataByLabel[label].reverse().slice(0, 10).reverse();
+          dataByLabel[label].reverse().slice(0, 5).reverse();
         });
       }
 
@@ -151,10 +150,10 @@
       } else {
         Object.keys(dataByLabel).forEach((label) => {
           chartByLabel[label].data.labels.push(dayjs().format('HH:mm:ss'));
-          chartByLabel[label].data.labels = chartByLabel[label].data.labels.reverse().slice(0, 10).reverse();
+          chartByLabel[label].data.labels = chartByLabel[label].data.labels.reverse().slice(0, 5).reverse();
           chartByLabel[label].data.datasets.forEach((d) => {
             d.data.push(dataByLabel[label].slice(-1)[0].pointValue);
-            d.data = d.data.reverse().slice(0, 10).reverse();
+            d.data = d.data.reverse().slice(0, 5).reverse();
           });
           chartByLabel[label].update();
         });
@@ -182,28 +181,44 @@
         selectedBranch = e.target.value;
         dataByLabel = null;
         chartByLabel = null;
-        historyLastId = 0;
 
         historyBySource = labelsByBranch[selectedBranch].reduce((prev, curr) => {
           return {
             ...prev,
-            [curr.split('.')[2]]: [],
+            [curr.split('.')[2]]: {
+              ...prev[curr.split('.')[2]],
+              [curr]: []
+            },
           };
         }, {});
 
-        document.getElementById('chart-data').innerHTML = labelsByBranch[selectedBranch].map(label => {
-          const labelShow = label.split('.');
-          labelShow.shift();
+        const sources = Object.keys(historyBySource).sort();
 
-          return `
-            <div class="block w-full p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-[12px] font-bold text-gray-700 text-wrap">${labelShow.join('.')}</span>
-                <span id="${label}-condition-label" class="font-bold text-[12px]"></span>
-              </div>
-              <canvas id="${label}-canvas" class="w-full h-[320px]"></canvas>
-            </div>
-          `;
+        document.getElementById('chart-data').innerHTML = sources.map(source => {
+          let a = `<div class='px-[20px] py-[16px] bg-primary mb-[12px] text-white'>
+            <span class="font-bold text-[20px]">${source}</span>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full mb-2 mt-2">`;
+
+          labelsByBranch[selectedBranch].map(label => {
+            const labelShow = label.split('.');
+            labelShow.shift();
+
+            if (labelShow[1] === source) {
+              a = a + `
+                <div class="block w-full p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="text-[12px] font-bold text-gray-700 text-wrap">${labelShow[2].replace(/\_/g, ' ')}</span>
+                    <span id="${label}-condition-label" class="font-bold text-[12px]"></span>
+                  </div>
+                  <canvas id="${label}-canvas" class="w-full h-[320px]"></canvas>
+                </div>
+              `;
+            }
+          }).join('');
+
+          a = a + `</div></div>`;
+
+          return a;
         }).join('');
 
         document.getElementById('table-data').innerHTML = Object.keys(historyBySource).map((source) => {
@@ -216,18 +231,14 @@
                 <table class="w-full text-sm text-left rtl:text-right text-gray-500">
                   <thead class="text-xs text-gray-700 uppercase bg-gray-50">
                       <tr>
-                          <th scope="col" class="px-6 py-3">
-                            ID
-                          </th>
-                          <th scope="col" class="px-6 py-3">
-                            pointName
-                          </th>
-                          <th scope="col" class="px-6 py-3">
-                              pointValue
-                          </th>
-                          <th scope="col" class="px-6 py-3">
-                              pointTimestamp
-                          </th>
+                        ${Object.keys(historyBySource[source]).sort().map((pointName) => {
+                          return `<th scope="col" class="px-6 py-3" style="white-space: nowrap;">
+                            ${pointName.split(['.'])[3].replace(/\_/g, ' ')}
+                          </th>`;
+                        }).join('')}
+                        <th scope="col" class="px-6 py-3">
+                            pointTimestamp
+                        </th>
                       </tr>
                   </thead>
                   <tbody id="${source}-table">
