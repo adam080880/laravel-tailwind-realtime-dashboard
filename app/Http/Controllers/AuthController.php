@@ -17,10 +17,14 @@ class AuthController extends Controller
 
         $user = User::where('email', $validated['email'])->first();
 
+        if (!$user->verified) {
+            return redirect()->route('login')->withErrors(['email' => 'User belum diverifikasi oleh admin!']);
+        }
+
         if (Hash::check($validated['password'], $user->password)) {
             Auth::login($user);
 
-            return redirect()->route('dashboard');
+            return redirect()->route('dashboard.home');
         }
 
         return redirect()->route('login')->withErrors(['password' => 'Invalid password']);

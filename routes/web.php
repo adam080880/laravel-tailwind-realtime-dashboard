@@ -21,5 +21,10 @@ Route::post('/stream_data/by_labels', [StreamDataController::class, 'getSnapshot
 Route::post('/stream_data/history_by_labels', [StreamDataController::class, 'getHistoryByLabels'])->name('stream_data.history_by_labels');
 // Route::post('/stream_data/history_by_labels_update', [StreamDataController::class, 'getSnapshotByLabelsAndLastId'])->name('stream_data.history_by_labels_update');
 
-Route::get('/', [StreamDataController::class, 'dashboard'])->name('dashboard')->middleware('auth');
+Route::post('/update-user', [StreamDataController::class, 'update_user'])->name('dashboard.update-user')->middleware('auth');
+Route::post('/change-password', [StreamDataController::class, 'change_password'])->name('dashboard.change-password')->middleware('auth');
+Route::get('/delete-user', [StreamDataController::class, 'delete_user'])->name('dashboard.delete-user')->middleware('auth');
+Route::get('/confirm-user', [StreamDataController::class, 'confirm_user'])->name('dashboard.confirm-user')->middleware('auth');
+Route::get('/stream', [StreamDataController::class, 'dashboard'])->name('dashboard.stream')->middleware('auth');
+Route::get('/', [StreamDataController::class, 'home'])->name('dashboard.home')->middleware('auth');
 
